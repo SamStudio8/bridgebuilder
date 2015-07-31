@@ -90,11 +90,18 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
     int replace_entries = replace_header->n_targets;
     
     int *trans = malloc(sizeof(int)*file_entries);
+
+    int k;
+    dprintf(STDERR_FILENO, "FENTRIES: %d\n", file_entries);
+    for (k=0; k < file_entries; k++){
+        trans[k] = replace_entries;
+    }
     
     char* linepointer = NULL;
     size_t read = 0;
     
     int counter = file_entries;
+    int translations = 0;
     
     while (!feof(trans_file) && !ferror(trans_file) && counter > 0) {
         getline(&linepointer, &read, trans_file);
@@ -114,10 +121,12 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
         if(i < file_entries) {
             // A tid requires replacement
             int j = 0;
+            translations += 1;
             for ( ; j < replace_entries; j++ ) {
                 char* item = replace_header->target_name[j];
                 if (!strcmp(item,sep)) { break; }
             }
+            dprintf(STDERR_FILENO, "TRANSLATING [%d][%d]: '%s':'%s'\n", i, j, file_header->target_name[i], replace_header->target_name[j]);
             trans[i] = j;
         }
         counter--;
@@ -125,6 +134,9 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
     free(linepointer);
     
     fclose(trans_file);
+    if (translations == 0){
+        dprintf(STDERR_FILENO, "No translations performed on '%s'. Are you sure this file needs translation?\n", trans_name);
+    }
     return trans;
 }
 
@@ -171,7 +183,7 @@ state_t* init(parsed_opts_t* opts) {
 
     // TODO: add option to merge headers instead of just asking for one
     // TODO: create RG translation table
-    samFile* hdr_load = sam_open(opts->output_header_name, "r", 0);
+    samFile* hdr_load = sam_open(opts->output_header_name, "r");
     if (!hdr_load) {
         dprintf(STDERR_FILENO, "Could not open header file\n");
         return NULL;
@@ -182,7 +194,7 @@ state_t* init(parsed_opts_t* opts) {
       dprintf(STDERR_FILENO, "Header has no SQ targets, pointless to proceed!\n");
       return NULL;
     }
-    retval->output_file = sam_open(opts->output_name, "wb", 0);
+    retval->output_file = sam_open(opts->output_name, "wb");
     
     if (retval->output_file == NULL) {
         printf("Could not open output file: %s\r\n", opts->output_name);
@@ -202,7 +214,7 @@ state_t* init(parsed_opts_t* opts) {
         return NULL;
     }
     for (size_t i = 0; i < opts->input_count; i++) {
-        retval->input_file[i] = sam_open(opts->input_name[i], "rb", 0);
+        retval->input_file[i] = sam_open(opts->input_name[i], "rb");
         if (retval->input_file[i] == NULL) {
             dprintf(STDERR_FILENO, "Could not open input file: %s\r\n", opts->input_name[i]);
             return NULL;
