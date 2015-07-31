@@ -94,7 +94,8 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
     int k;
     dprintf(STDERR_FILENO, "FENTRIES: %d\n", file_entries);
     for (k=0; k < file_entries; k++){
-        trans[k] = replace_entries;
+        // Unmapped
+        trans[k] = -1;
     }
     
     char* linepointer = NULL;
