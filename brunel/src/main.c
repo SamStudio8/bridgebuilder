@@ -92,7 +92,6 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
     int *trans = malloc(sizeof(int)*file_entries);
 
     int k;
-    dprintf(STDERR_FILENO, "FENTRIES: %d\n", file_entries);
     for (k=0; k < file_entries; k++){
         // Unmapped
         trans[k] = -1;
@@ -127,7 +126,7 @@ int* build_translation_file(const char* trans_name, bam_hdr_t* file_header, bam_
                 char* item = replace_header->target_name[j];
                 if (!strcmp(item,sep)) { break; }
             }
-            dprintf(STDERR_FILENO, "TRANSLATING [%d][%d]: '%s':'%s'\n", i, j, file_header->target_name[i], replace_header->target_name[j]);
+            dprintf(STDERR_FILENO, "Translating '%s'->'%s'\n", file_header->target_name[i], replace_header->target_name[j]);
             trans[i] = j;
         }
         counter--;
@@ -280,6 +279,7 @@ bool merge(state_t* opts) {
     }
     
     bam1_t** file_read = calloc(opts->input_count, sizeof(bam1_t*));
+    int unmapped_reads = 0;
     size_t files_to_merge = opts->input_count;
     // initialise the first read for each input file
     for (size_t i = 0; i < opts->input_count; i++) {
@@ -294,9 +294,22 @@ bool merge(state_t* opts) {
             if (opts->input_trans[i]) {
                 // Translate the tid and mate tid but only if they're not null values
                 if (file_read[i]->core.tid != -1) {
+                    if(opts->input_trans[i][file_read[i]->core.tid] == -1){
+                        // Set unmapped flag, position and quality
+                        file_read[i]->core.flag |= BAM_FUNMAP;
+                        file_read[i]->core.flag ^= BAM_FPROPER_PAIR;
+                        file_read[i]->core.pos = -1;
+                        file_read[i]->core.qual = 0;
+                        unmapped_reads += 1;
+                    }
                     file_read[i]->core.tid = opts->input_trans[i][file_read[i]->core.tid];
                 }
                 if (file_read[i]->core.mtid != -1) {
+                    if(opts->input_trans[i][file_read[i]->core.mtid] == -1){
+                        // Set mate unmapped flag and mate position
+                        file_read[i]->core.flag |= BAM_FMUNMAP;
+                        file_read[i]->core.mpos = -1;
+                    }
                     file_read[i]->core.mtid = opts->input_trans[i][file_read[i]->core.mtid];
                 }
             }
@@ -316,14 +329,28 @@ bool merge(state_t* opts) {
             if (opts->input_trans[i]) {
                 // Translate the tid and mate tid but only if they're not null values
                 if (file_read[i]->core.tid != -1) {
+                    if(opts->input_trans[i][file_read[i]->core.tid] == -1){
+                        // Set unmapped flag, position and quality
+                        file_read[i]->core.flag |= BAM_FUNMAP;
+                        file_read[i]->core.flag ^= BAM_FPROPER_PAIR;
+                        file_read[i]->core.pos = -1;
+                        file_read[i]->core.qual = 0;
+                        unmapped_reads += 1;
+                    }
                     file_read[i]->core.tid = opts->input_trans[i][file_read[i]->core.tid];
                 }
                 if (file_read[i]->core.mtid != -1) {
+                    if(opts->input_trans[i][file_read[i]->core.mtid] == -1){
+                        // Set mate unmapped flag and mate position
+                        file_read[i]->core.flag |= BAM_FMUNMAP;
+                        file_read[i]->core.mpos = -1;
+                    }
                     file_read[i]->core.mtid = opts->input_trans[i][file_read[i]->core.mtid];
                 }
             }
         }
     }
+    dprintf(STDERR_FILENO, "%d previously mapped reads now marked as unmapped.\n", unmapped_reads);
 
     // Clean up
     for (size_t i = 0; i < opts->input_count; i++) {
